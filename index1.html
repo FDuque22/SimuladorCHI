@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Simulador Tabela Price</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background: #f0f0f0;
+    }
+
+    h1 {
+        text-align: center;
+        margin-bottom: 25px;
+    }
+
+    .card {
+        background: white;
+        padding: 20px;
+        border-radius: 15px;
+        max-width: 700px;
+        margin: 0 auto 30px auto;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    label {
+        font-weight: bold;
+        display: block;
+        margin-top: 15px;
+    }
+
+    input, select, button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 5px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+    }
+
+    button {
+        background: #007bff;
+        color: white;
+        border: none;
+        margin-top: 20px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: 0.3s;
+    }
+
+    button:hover {
+        background: #0056d6;
+    }
+
+    .resumo {
+        background: white;
+        padding: 20px;
+        border-radius: 15px;
+        max-width: 700px;
+        margin: 0 auto 30px auto;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .resumo h2 {
+        margin-top: 0;
+        color: #007bff;
+    }
+
+    .resumo-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .resumo-item:last-child {
+        border-bottom: none;
+    }
+
+    .resumo-label {
+        font-weight: bold;
+    }
+
+    .resumo-valor {
+        color: #333;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 25px;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        max-width: 900px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    th, td {
+        border-bottom: 1px solid #ddd;
+        padding: 10px;
+        text-align: center;
+        font-size: 14px;
+    }
+
+    th {
+        background: #007bff;
+        color: white;
+    }
+
+</style>
+</head>
+<body>
+
+<h1>Simulador - Tabela Price</h1>
+
+<div class="card">
+    <label>Produto:</label>
+    <select id="produto">
+        <option value="">Selecione...</option>
+        <option value="reforma">Plano Reforma</option>
+        <option value="complementacao">Complementação de Financiamento</option>
+    </select>
+
+    <label>Valor do Crédito (R$):</label>
+    <input type="number" id="valor" min="1">
+
+    <label>Prazo (meses):</label>
+    <input type="number" id="prazo" min="2" max="60">
+
+    <label>Taxa (% a.m):</label>
+    <input type="text" id="taxa" readonly style="background:#e9ecef;">
+
+    <button onclick="calcular()">Calcular</button>
+</div>
+
+<div id="resumo"></div>
+<div id="resultado"></div>
+
+<script>
+function definirTaxa() {
+    const produto = document.getElementById("produto").value;
+    const prazo = parseInt(document.getElementById("prazo").value);
+    const taxaInput = document.getElementById("taxa");
+
+    if (!produto || !prazo) {
+        taxaInput.value = "";
+        return;
+    }
+
+    let taxa = 0;
+
+    if (produto === "reforma") {
+        if (prazo >= 2 && prazo <= 30) taxa = 1.40;
+        else if (prazo >= 31 && prazo <= 60) taxa = 1.62;
+    }
+
+    if (produto === "complementacao") {
+        if (prazo >= 2 && prazo <= 30) taxa = 1.40;
+        else if (prazo >= 31 && prazo <= 60) taxa = 1.58;
+    }
+
+    taxaInput.value = taxa.toFixed(2) + "%";
+}
+
+document.getElementById("produto").addEventListener("change", definirTaxa);
+document.getElementById("prazo").addEventListener("input", definirTaxa);
+
+function formatarMoeda(valor) {
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function calcular() {
+    const valor = parseFloat(document.getElementById("valor").value);
+    const prazo = parseInt(document.getElementById("prazo").value);
+    const taxa = parseFloat(document.getElementById("taxa").value.replace("%","")) / 100;
+
+    if (!valor || !prazo || !taxa) {
+        alert("Preencha todos os campos corretamente!");
+        return;
+    }
+
+    // Constantes
+    const taxaAdm = 30.00;
+    const taxaSeguro = 0.0018595; // Taxa fixa de seguro
+
+    // Cálculo da parcela no Price
+    const fator = Math.pow(1 + taxa, prazo);
+    const parcela = valor * (fator * taxa) / (fator - 1);
+
+    // === CÁLCULO DO SEGURO (seguindo a lógica Python) ===
+    let seguroLista = [];
+    let saldoTemp = valor;
+
+    // Calcular seguro variável mês a mês
+    for (let i = 1; i <= prazo; i++) {
+        let seguroVariavel = saldoTemp * taxaSeguro;
+        seguroLista.push(seguroVariavel);
+
+        let jurosTemp = saldoTemp * taxa;
+        let amortizacaoTemp = parcela - jurosTemp;
+        saldoTemp -= amortizacaoTemp;
+        saldoTemp = Math.max(saldoTemp, 0);
+    }
+
+    // Total de seguro e média (seguro fixo mensal)
+    const totalSeguro = seguroLista.reduce((acc, val) => acc + val, 0);
+    const seguroMensal = totalSeguro / prazo;
+
+    // === DEMAIS CÁLCULOS ===
+    const aberturaCredito = valor * 0.01;
+    const totalAdm = taxaAdm * prazo;
+
+    // IOF
+    const dias = prazo >= 12 ? 365 : prazo * 30;
+    const iofAdicional = valor * 0.0038;
+    const iofDiario = valor * 0.000082 * dias;
+    const iofTotal = iofAdicional + iofDiario;
+
+    const valorAReceber = valor - aberturaCredito;
+
+    // === TABELA DE AMORTIZAÇÃO ===
+    let saldo = valor;
+    let totalJuros = 0;
+
+    let tabela = `
+        <table>
+            <tr>
+                <th>Parcela</th>
+                <th>Juros (R$)</th>
+                <th>Amortização (R$)</th>
+                <th>Prestação (R$)</th>
+                <th>Seguro (R$)</th>
+                <th>Taxa Adm (R$)</th>
+                <th>Encargo Total (R$)</th>
+                <th>Saldo Devedor (R$)</th>
+            </tr>
+    `;
+
+    for (let i = 0; i <= prazo; i++) {
+        if (i === 0) {
+            tabela += `
+                <tr>
+                    <td>0</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(0)}</td>
+                    <td>${formatarMoeda(saldo)}</td>
+                </tr>
+            `;
+            continue;
+        }
+
+        let juros = saldo * taxa;
+        let amortizacao = parcela - juros;
+        saldo -= amortizacao;
+        saldo = Math.max(saldo, 0);
+
+        // Seguro variável da parcela (da lista calculada)
+        let seguroParcela = seguroLista[i - 1];
+        
+        let encargoTotal = parcela + seguroParcela + taxaAdm;
+        totalJuros += juros;
+
+        tabela += `
+            <tr>
+                <td>${i}</td>
+                <td>${formatarMoeda(juros)}</td>
+                <td>${formatarMoeda(amortizacao)}</td>
+                <td>${formatarMoeda(parcela)}</td>
+                <td>${formatarMoeda(seguroParcela)}</td>
+                <td>${formatarMoeda(taxaAdm)}</td>
+                <td>${formatarMoeda(encargoTotal)}</td>
+                <td>${formatarMoeda(saldo)}</td>
+            </tr>
+        `;
+    }
+
+    tabela += "</table>";
+
+    // === RESUMO ===
+    const encargoMensal = parcela + seguroMensal + taxaAdm;
+    const totalPagar = encargoMensal * prazo;
+
+    let resumo = `
+        <div class="resumo">
+            <h2>Resumo da Simulação</h2>
+            <div class="resumo-item">
+                <span class="resumo-label">Valor Financiado Base:</span>
+                <span class="resumo-valor">${formatarMoeda(valor)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Taxa de Juros (a.m):</span>
+                <span class="resumo-valor">${(taxa * 100).toFixed(2)}%</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Prazo:</span>
+                <span class="resumo-valor">${prazo} meses</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Taxa de Seguro:</span>
+                <span class="resumo-valor">${(taxaSeguro * 100).toFixed(5)}%</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Seguro Mensal (Médio):</span>
+                <span class="resumo-valor">${formatarMoeda(seguroMensal)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Total Seguro:</span>
+                <span class="resumo-valor">${formatarMoeda(totalSeguro)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Abertura de Crédito (1%):</span>
+                <span class="resumo-valor">${formatarMoeda(aberturaCredito)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">IOF Adicional:</span>
+                <span class="resumo-valor">${formatarMoeda(iofAdicional)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">IOF Diário:</span>
+                <span class="resumo-valor">${formatarMoeda(iofDiario)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">IOF Total:</span>
+                <span class="resumo-valor">${formatarMoeda(iofTotal)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Taxa Adm Mensal:</span>
+                <span class="resumo-valor">${formatarMoeda(taxaAdm)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Total Taxa Adm:</span>
+                <span class="resumo-valor">${formatarMoeda(totalAdm)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Valor a Receber:</span>
+                <span class="resumo-valor">${formatarMoeda(valorAReceber)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Prestação (Price):</span>
+                <span class="resumo-valor">${formatarMoeda(parcela)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Encargo Total Mensal:</span>
+                <span class="resumo-valor">${formatarMoeda(encargoMensal)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Total de Juros:</span>
+                <span class="resumo-valor">${formatarMoeda(totalJuros)}</span>
+            </div>
+            <div class="resumo-item">
+                <span class="resumo-label">Total a Pagar:</span>
+                <span class="resumo-valor">${formatarMoeda(totalPagar)}</span>
+            </div>
+        </div>
+    `;
+
+    document.getElementById("resumo").innerHTML = resumo;
+    document.getElementById("resultado").innerHTML = tabela;
+}
+</script>
+
+</body>
+</html>
